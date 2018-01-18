@@ -1,0 +1,110 @@
+/**
+ * The default coverage tasks don't include connected tests, so this custom job combines
+ * unit tests and connected tests before generating Jacoco reports.
+ *
+ * If you have multiple product flavors, or want to run Release build tests,
+ */
+project.afterEvaluate {
+
+    // Don't do coverage for these classes.
+    def excludePatterns = ['**/R.class', '**/R$*.class', '**/Manifest*.*']
+
+    /**
+     * Collect all the tasks necessary to generate coverage.
+     * Include both unit tests and the instrumented coverage task.
+     * If you have multiple modules or flavors, it may be appropriate to list individual test tasks here.
+     */
+    def coverageTasks = []
+    coverageTasks.add("createDebugCoverageReport")
+    coverageTasks.add("testDebugUnitTest")
+
+    /**
+     * Without this task ordering, the Jacoco agent may not exist
+     * and the unit test task will fail.
+     */
+    tasks."${"testDebugUnitTest"}" {
+        ignoreFailures true
+        def destFile = "${rootProject.rootDir}/build/outputs/code-coverage/unitCoverage.ec"
+        jvmArgs "-javaagent:$buildDir/intermediates/jacoco/jacocoagent.jar=append=true,destfile=${destFile}"
+    }
+
+    /**
+     * Run the unit tests and connected tests, merge the coverage files.
+     *
+     * See https://docs.gradle.org/current/dsl/org.gradle.testing.jacoco.tasks.JacocoMerge.html
+     */
+    def mergedCoverageFile = file("${rootProject.buildDir}/outputs/mergedCoverage.ec")
+    task "debugJacocoMerge"(type: JacocoMerge, dependsOn: coverageTasks) {
+        group = "Documentation"
+        description = "Merge Jacoco coverage data after running offline and connected tests."
+
+        // Not inherited from JacocoMerge, surprise. (!)
+        jacocoClasspath = project.configurations['androidJacocoAnt']
+
+        // Collect the coverage files which the prerequisite tasks generated, add to executionData.
+        def coverageLocations = [
+                "${projectDir}",
+                "${buildDir}/outputs/code-coverage/"
+        ]
+
+        coverageLocations.each { locationName ->
+            executionData fileTree (
+                    dir: locationName,
+                    includes: ['*.exec', '*.ec']
+            )
+        }
+
+        // Output of this task goes here.
+        destinationFile = mergedCoverageFile
+
+        doLast {
+            print "Adding coverage from these files: \n"
+            coverageLocations.each { locationName ->
+                def fileList = fileTree (
+                        dir: locationName,
+                        includes: ['*.exec', '*.ec']
+                )
+                fileList.getFiles().each { coverageFile ->
+                    print "\t" + coverageFile.path + " " + coverageFile.size() + "\n"
+                }
+            }
+        }
+    }
+
+    /**
+     * Create the task to generate HTML/XML coverage reports
+     * from the coverage file created in jacocoMerge.
+     *
+     * See https://docs.gradle.org/current/dsl/org.gradle.testing.jacoco.tasks.JacocoReport.html
+     */
+    task "${sourceName}MergedCoverage" (type:JacocoReport, dependsOn: "${sourceName}JacocoMerge") {
+        group = "Documentation"
+        description = "Generate Jacoco coverage reports on the debug build."
+
+        // Not inherited from JacocoReport, surprise. (!)
+        jacocoClasspath = project.configurations['androidJacocoAnt']
+
+        // If there are multiple modules, add those file trees here too.
+        classDirectories = fileTree (
+                dir: "${project.buildDir}/intermediates/classes/debug",
+                excludes: excludePatterns
+        )
+
+        def coverageSourceDirs = ["src/main/java"]
+        additionalSourceDirs = files(coverageSourceDirs)
+        sourceDirectories = files(coverageSourceDirs)
+        executionData = files(mergedCoverageFile)
+
+        reports {
+            xml.enabled = true
+            xml.destination = file("${buildDir}/reports/coverage/mergedCoverage.xml")
+
+            html.enabled = true
+            html.destination = file("${buildDir}/reports/coverage/mergedCoverage/")
+        }
+
+        doLast {
+            print "See the report at: file://${buildDir}/reports/coverage/mergedCoverage/index.html"
+        }
+    }
+}
