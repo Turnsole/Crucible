@@ -24,7 +24,7 @@ public class MainActivity extends Activity {
         if (false) {
             /**
              * This will never get executed in the app, only in unit tests.
-             * (Simulates a rare event.)
+             * (Demonstrates the difference in coverage.)
              */
             almostDeadCode();
         }
