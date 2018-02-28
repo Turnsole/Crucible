@@ -1,9 +1,3 @@
-/**
- * The default coverage tasks don't include connected tests, so this custom job combines
- * unit tests and connected tests before generating Jacoco reports.
- *
- * If you have multiple product flavors, or want to run Release build tests,
- */
 
 /**
  * Run the unit tests and connected tests, merge the coverage files.
