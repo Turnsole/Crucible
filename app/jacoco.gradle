@@ -6,27 +6,13 @@
  */
 project.afterEvaluate {
 
-    // Don't do coverage for these classes.
+    // Don't calculate coverage for these classes.
     def excludePatterns = ['**/R.class', '**/R$*.class', '**/Manifest*.*']
 
-    /**
-     * Collect all the tasks necessary to generate coverage.
-     * Include both unit tests and the instrumented coverage task.
-     * If you have multiple modules or flavors, it may be appropriate to list individual test tasks here.
-     */
+    // These are the test tasks to generate coverage from.
     def coverageTasks = []
-    coverageTasks.add("createDebugCoverageReport")
+    coverageTasks.add("createDebugCoverageReport") // Runs instrumentation tests.
     coverageTasks.add("testDebugUnitTest")
-
-    /**
-     * Without this task ordering, the Jacoco agent may not exist
-     * and the unit test task will fail.
-     */
-    tasks."${"testDebugUnitTest"}" {
-        ignoreFailures true
-        def destFile = "${rootProject.rootDir}/build/outputs/code-coverage/unitCoverage.ec"
-        jvmArgs "-javaagent:$buildDir/intermediates/jacoco/jacocoagent.jar=append=true,destfile=${destFile}"
-    }
 
     /**
      * Run the unit tests and connected tests, merge the coverage files.
@@ -44,7 +30,7 @@ project.afterEvaluate {
         // Collect the coverage files which the prerequisite tasks generated, add to executionData.
         def coverageLocations = [
                 "${projectDir}",
-                "${buildDir}/outputs/code-coverage/"
+                "${buildDir}/outputs/code-coverage/connected/"
         ]
 
         coverageLocations.each { locationName ->
@@ -77,7 +63,7 @@ project.afterEvaluate {
      *
      * See https://docs.gradle.org/current/dsl/org.gradle.testing.jacoco.tasks.JacocoReport.html
      */
-    task "${sourceName}MergedCoverage" (type:JacocoReport, dependsOn: "${sourceName}JacocoMerge") {
+    task "mergedCoverage" (type:JacocoReport, dependsOn: "debugJacocoMerge") {
         group = "Documentation"
         description = "Generate Jacoco coverage reports on the debug build."
 
@@ -88,9 +74,12 @@ project.afterEvaluate {
         classDirectories = fileTree (
                 dir: "${project.buildDir}/intermediates/classes/debug",
                 excludes: excludePatterns
+        ) + fileTree(
+                dir: "${project.buildDir}/tmp/kotlin-classes/debug",
+                excludes: excludePatterns
         )
 
-        def coverageSourceDirs = ["src/main/java"]
+        def coverageSourceDirs = ["src/main/java", "src/main/kotlin"]
         additionalSourceDirs = files(coverageSourceDirs)
         sourceDirectories = files(coverageSourceDirs)
         executionData = files(mergedCoverageFile)

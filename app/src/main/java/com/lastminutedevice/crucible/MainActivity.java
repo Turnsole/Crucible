@@ -4,7 +4,7 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.widget.TextView;
 
-import com.lastminutedevice.crucible.R;
+import static com.lastminutedevice.crucible.UtilsKt.almostDeadCode;
 
 public class MainActivity extends Activity {
 
@@ -20,5 +20,13 @@ public class MainActivity extends Activity {
 
         String text = UtilsKt.generateString();
         ((TextView) findViewById(R.id.generated_contents)).setText(text);
+
+        if (false) {
+            /**
+             * This will never get executed in the app, only in unit tests.
+             * (Simulates a rare event.)
+             */
+            almostDeadCode();
+        }
     }
 }

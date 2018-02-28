@@ -9,8 +9,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 
-import com.lastminutedevice.crucible.R
-
 /**
  * Instrumented test, which will execute on an Android device.
  *
