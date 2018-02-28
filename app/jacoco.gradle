@@ -4,96 +4,89 @@
  *
  * If you have multiple product flavors, or want to run Release build tests,
  */
-project.afterEvaluate {
+
+/**
+ * Run the unit tests and connected tests, merge the coverage files.
+ *
+ * See https://docs.gradle.org/current/dsl/org.gradle.testing.jacoco.tasks.JacocoMerge.html
+ */
+def mergedCoverageFile = file("${rootProject.buildDir}/outputs/mergedCoverage.ec")
+task "debugJacocoMerge"(type: JacocoMerge, dependsOn: ['testDebugUnitTest', 'createDebugCoverageReport']) {
+    group = "Documentation"
+    description = "Merge Jacoco coverage data after running offline and connected tests."
+
+    // Not inherited from JacocoMerge, surprise. (!)
+    jacocoClasspath = project.configurations['androidJacocoAnt']
+
+    // Collect the coverage files which the prerequisite tasks generated, add to executionData.
+    def coverageLocations = [
+            "${projectDir}",
+            "${buildDir}/outputs/code-coverage/connected/"
+    ]
+
+    coverageLocations.each { locationName ->
+        executionData fileTree (
+                dir: locationName,
+                includes: ['*.exec', '*.ec']
+        )
+    }
+
+    // Output of this task goes here.
+    destinationFile = mergedCoverageFile
+
+    doLast {
+        print "Adding coverage from these files: \n"
+        coverageLocations.each { locationName ->
+            def fileList = fileTree (
+                    dir: locationName,
+                    includes: ['*.exec', '*.ec']
+            )
+            fileList.getFiles().each { coverageFile ->
+                print "\t" + coverageFile.path + " " + coverageFile.size() + "\n"
+            }
+        }
+    }
+}
+
+/**
+ * Create the task to generate HTML/XML coverage reports
+ * from the coverage file created in jacocoMerge.
+ *
+ * See https://docs.gradle.org/current/dsl/org.gradle.testing.jacoco.tasks.JacocoReport.html
+ */
+task "mergedCoverage" (type:JacocoReport, dependsOn: "debugJacocoMerge") {
+    group = "Documentation"
+    description = "Generate Jacoco coverage reports on the debug build."
+
+    // Not inherited from JacocoReport, surprise. (!)
+    jacocoClasspath = project.configurations['androidJacocoAnt']
 
     // Don't calculate coverage for these classes.
     def excludePatterns = ['**/R.class', '**/R$*.class', '**/Manifest*.*']
 
-    // These are the test tasks to generate coverage from.
-    def coverageTasks = []
-    coverageTasks.add("createDebugCoverageReport") // Runs instrumentation tests.
-    coverageTasks.add("testDebugUnitTest")
+    // If there are multiple modules, add those file trees here too.
+    classDirectories = fileTree (
+            dir: "${project.buildDir}/intermediates/classes/debug",
+            excludes: excludePatterns
+    ) + fileTree(
+            dir: "${project.buildDir}/tmp/kotlin-classes/debug",
+            excludes: excludePatterns
+    )
 
-    /**
-     * Run the unit tests and connected tests, merge the coverage files.
-     *
-     * See https://docs.gradle.org/current/dsl/org.gradle.testing.jacoco.tasks.JacocoMerge.html
-     */
-    def mergedCoverageFile = file("${rootProject.buildDir}/outputs/mergedCoverage.ec")
-    task "debugJacocoMerge"(type: JacocoMerge, dependsOn: coverageTasks) {
-        group = "Documentation"
-        description = "Merge Jacoco coverage data after running offline and connected tests."
+    def coverageSourceDirs = ["src/main/java", "src/main/kotlin"]
+    additionalSourceDirs = files(coverageSourceDirs)
+    sourceDirectories = files(coverageSourceDirs)
+    executionData = files(mergedCoverageFile)
 
-        // Not inherited from JacocoMerge, surprise. (!)
-        jacocoClasspath = project.configurations['androidJacocoAnt']
+    reports {
+        xml.enabled = true
+        xml.destination = file("${buildDir}/reports/coverage/mergedCoverage.xml")
 
-        // Collect the coverage files which the prerequisite tasks generated, add to executionData.
-        def coverageLocations = [
-                "${projectDir}",
-                "${buildDir}/outputs/code-coverage/connected/"
-        ]
-
-        coverageLocations.each { locationName ->
-            executionData fileTree (
-                    dir: locationName,
-                    includes: ['*.exec', '*.ec']
-            )
-        }
-
-        // Output of this task goes here.
-        destinationFile = mergedCoverageFile
-
-        doLast {
-            print "Adding coverage from these files: \n"
-            coverageLocations.each { locationName ->
-                def fileList = fileTree (
-                        dir: locationName,
-                        includes: ['*.exec', '*.ec']
-                )
-                fileList.getFiles().each { coverageFile ->
-                    print "\t" + coverageFile.path + " " + coverageFile.size() + "\n"
-                }
-            }
-        }
+        html.enabled = true
+        html.destination = file("${buildDir}/reports/coverage/mergedCoverage/")
     }
 
-    /**
-     * Create the task to generate HTML/XML coverage reports
-     * from the coverage file created in jacocoMerge.
-     *
-     * See https://docs.gradle.org/current/dsl/org.gradle.testing.jacoco.tasks.JacocoReport.html
-     */
-    task "mergedCoverage" (type:JacocoReport, dependsOn: "debugJacocoMerge") {
-        group = "Documentation"
-        description = "Generate Jacoco coverage reports on the debug build."
-
-        // Not inherited from JacocoReport, surprise. (!)
-        jacocoClasspath = project.configurations['androidJacocoAnt']
-
-        // If there are multiple modules, add those file trees here too.
-        classDirectories = fileTree (
-                dir: "${project.buildDir}/intermediates/classes/debug",
-                excludes: excludePatterns
-        ) + fileTree(
-                dir: "${project.buildDir}/tmp/kotlin-classes/debug",
-                excludes: excludePatterns
-        )
-
-        def coverageSourceDirs = ["src/main/java", "src/main/kotlin"]
-        additionalSourceDirs = files(coverageSourceDirs)
-        sourceDirectories = files(coverageSourceDirs)
-        executionData = files(mergedCoverageFile)
-
-        reports {
-            xml.enabled = true
-            xml.destination = file("${buildDir}/reports/coverage/mergedCoverage.xml")
-
-            html.enabled = true
-            html.destination = file("${buildDir}/reports/coverage/mergedCoverage/")
-        }
-
-        doLast {
-            print "See the report at: file://${buildDir}/reports/coverage/mergedCoverage/index.html"
-        }
+    doLast {
+        print "See the report at: file://${buildDir}/reports/coverage/mergedCoverage/index.html"
     }
 }
